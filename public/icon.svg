@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080b10"/>
+      <stop offset="100%" stop-color="#141923"/>
+    </linearGradient>
+    <linearGradient id="yellowNeon" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fcee0a"/>
+      <stop offset="100%" stop-color="#ffbf00"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <rect x="24" y="24" width="464" height="464" rx="72" fill="none" stroke="#fcee0a" stroke-width="8" stroke-dasharray="32 16"/>
+
+  <!-- Cyberpunk Skull / Crosshair Icon -->
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#00f0ff" stroke-width="12" opacity="0.4"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#ff003c" stroke-width="4" stroke-dasharray="16 24"/>
+
+  <!-- Skull Head Outline -->
+  <path d="M 176,210 C 176,140 336,140 336,210 C 336,260 300,280 290,320 L 222,320 C 212,280 176,260 176,210 Z" fill="#fcee0a"/>
+  <!-- Cyber Optic Left Eye -->
+  <circle cx="215" cy="210" r="26" fill="#080b10"/>
+  <circle cx="215" cy="210" r="14" fill="#00f0ff"/>
+  <!-- Cyber Optic Right Eye (Target Reticle) -->
+  <circle cx="297" cy="210" r="26" fill="#080b10"/>
+  <circle cx="297" cy="210" r="14" fill="#ff003c"/>
+  <line x1="277" y1="210" x2="317" y2="210" stroke="#fcee0a" stroke-width="4"/>
+  <line x1="297" y1="190" x2="297" y2="230" stroke="#fcee0a" stroke-width="4"/>
+
+  <!-- Teeth / Jaw -->
+  <rect x="232" y="336" width="12" height="28" rx="4" fill="#fcee0a"/>
+  <rect x="250" y="336" width="12" height="28" rx="4" fill="#fcee0a"/>
+  <rect x="268" y="336" width="12" height="28" rx="4" fill="#fcee0a"/>
+
+  <!-- Cyberpunk Glitch Accents -->
+  <rect x="64" y="250" width="40" height="8" fill="#00f0ff"/>
+  <rect x="408" y="250" width="40" height="8" fill="#ff003c"/>
+  <text x="256" y="440" font-family="monospace" font-size="36" font-weight="900" fill="#fcee0a" text-anchor="middle" letter-spacing="6">EDGERUNNER</text>
+</svg>

@@ -1,0 +1,6 @@
+{
+  "name": "EDGERUNNER 2077 // Cyberpunk 3D Wave FPS",
+  "description": "Survive 50 intense waves in Night City. Chrome implants, Sandevistan bullet-time, Netrunner quickhacks, Cyberskeleton, cyberpsychosis management, and showdown with Adam Smasher.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
