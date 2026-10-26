@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { AirDropLoot, ChromeImplant, EnemyType, PlayerStats, WeaponType } from '../types/game';
+import { AirDropLoot, ChromeImplant, DamageIndicator, EnemyType, PlayerStats, WeaponType } from '../types/game';
 import { sound } from '../audio/SoundSystem';
 import { calculateMaxSanity, getImplantById, rollRandomImplant } from './Cyberware';
 import { Enemy } from './Enemy';
@@ -13,6 +13,16 @@ export interface RocketProjectile {
   velocity: THREE.Vector3;
   targetPos: THREE.Vector3;
   life: number;
+}
+
+export interface EnemyLaserProjectile {
+  mesh: THREE.Mesh;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  damage: number;
+  life: number;
+  shooterType: EnemyType;
+  shooterPos: THREE.Vector3;
 }
 
 export interface BulletTracer {
@@ -114,8 +124,11 @@ export class GameEngine {
 
   // Visual FX Arrays
   private rockets: RocketProjectile[] = [];
+  public enemyProjectiles: EnemyLaserProjectile[] = [];
   private tracers: BulletTracer[] = [];
   private sparks: SparkParticle[] = [];
+  public damageIndicators: DamageIndicator[] = [];
+  public damageFlashTimer: number = 0;
 
   // Reusable Math Helpers (Zero GC)
   private _forward = new THREE.Vector3();
@@ -572,29 +585,44 @@ export class GameEngine {
     }
   }
 
-  public claimAirDrop(equipImplantId?: string) {
+  public claimAirDrop(choice: 'chrome' | 'human_supplies', equipImplantId?: string) {
     if (!this.pendingAirDropLoot) return;
 
-    // 1. Refill all ammos
-    Object.keys(this.ammoInventory).forEach(key => {
-      const wKey = key as WeaponType;
-      const config = WEAPON_CONFIGS[wKey];
-      this.ammoInventory[wKey].reserve = config.maxReserve;
-      this.ammoInventory[wKey].current = config.magSize;
-    });
+    if (choice === 'human_supplies') {
+      // OPTION B: PURE HUMAN RESUPPLY (No Cyberware / Sanity-Preserving Build)
+      // Refills all ammunition completely
+      Object.keys(this.ammoInventory).forEach(key => {
+        const wKey = key as WeaponType;
+        const config = WEAPON_CONFIGS[wKey];
+        this.ammoInventory[wKey].reserve = config.maxReserve;
+        this.ammoInventory[wKey].current = config.magSize;
+      });
 
-    // 2. Heal HP & Armor
-    this.playerStats.hp = Math.min(this.playerStats.maxHp, this.playerStats.hp + this.pendingAirDropLoot.healthKits);
-    this.playerStats.armor = Math.min(this.playerStats.maxArmor, this.playerStats.armor + this.pendingAirDropLoot.armorShards);
+      // Massive Health & Armor boost
+      this.playerStats.hp = Math.min(this.playerStats.maxHp, this.playerStats.hp + 80);
+      this.playerStats.armor = Math.min(this.playerStats.maxArmor, this.playerStats.armor + 75);
 
-    // 3. Immunosuppressant (resets Cyberpsychosis to 0)
-    if (this.pendingAirDropLoot.immunosuppressant) {
+      // Immunosuppressant resets any active cyberpsychosis build-up to 0
       this.resetCyberpsychosis();
-    }
+      sound.speak('Chrome refused. Organic neural integrity preserved. Full tactical resupply granted.', 1.1, 1.05);
+    } else {
+      // OPTION A: CYBERWARE UPGRADE (Chrome Build)
+      // Standard ammo refill
+      Object.keys(this.ammoInventory).forEach(key => {
+        const wKey = key as WeaponType;
+        const config = WEAPON_CONFIGS[wKey];
+        this.ammoInventory[wKey].reserve = config.maxReserve;
+        this.ammoInventory[wKey].current = config.magSize;
+      });
 
-    // 4. Install chosen Chrome
-    if (equipImplantId && !this.equippedImplantIds.includes(equipImplantId)) {
-      this.equipChrome(equipImplantId);
+      // Modest health & armor repair
+      this.playerStats.hp = Math.min(this.playerStats.maxHp, this.playerStats.hp + 45);
+      this.playerStats.armor = Math.min(this.playerStats.maxArmor, this.playerStats.armor + 40);
+
+      // Install chosen Chrome
+      if (equipImplantId && !this.equippedImplantIds.includes(equipImplantId)) {
+        this.equipChrome(equipImplantId);
+      }
     }
 
     // Remove air drop mesh from scene
@@ -753,6 +781,83 @@ export class GameEngine {
     const points = new THREE.Points(geom, mat);
     this.scene.add(points);
     this.sparks.push({ mesh: points, velocities: vel, life: 0.5 });
+  }
+
+  // --- VISIBLE ENEMY ATTACK & PROJECTILES ---
+  private fireEnemyProjectile(enemy: Enemy) {
+    const startPos = enemy.getMuzzleWorldPos();
+    // Aim towards player body with small spread
+    const targetPos = this.playerPosition.clone().add(new THREE.Vector3(
+      (Math.random() - 0.5) * 0.4,
+      -0.2 + (Math.random() - 0.5) * 0.3,
+      (Math.random() - 0.5) * 0.4
+    ));
+    const dir = new THREE.Vector3().subVectors(targetPos, startPos).normalize();
+
+    let boltColor = 0xff7700;
+    let boltSpeed = 26;
+    let boltRadius = 0.08;
+    let boltLength = 1.0;
+
+    if (enemy.type === 'cyber_merc') {
+      boltColor = 0xff003c; // Crimson Red laser
+      boltSpeed = 32;
+      boltRadius = 0.07;
+      boltLength = 1.3;
+    } else if (enemy.type === 'maxtac') {
+      boltColor = 0x0088ff; // Electric Blue plasma
+      boltSpeed = 30;
+      boltRadius = 0.1;
+      boltLength = 1.1;
+    } else if (enemy.isBoss) {
+      boltColor = 0xff2200; // Adam Smasher Heavy Autocannon
+      boltSpeed = 36;
+      boltRadius = 0.14;
+      boltLength = 1.8;
+    }
+
+    const geom = new THREE.CylinderGeometry(boltRadius, boltRadius, boltLength, 6);
+    const mat = new THREE.MeshBasicMaterial({
+      color: boltColor,
+      transparent: true,
+      opacity: 0.95,
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.copy(startPos);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    this.scene.add(mesh);
+
+    this.enemyProjectiles.push({
+      mesh,
+      position: startPos,
+      velocity: dir.multiplyScalar(boltSpeed),
+      damage: enemy.attackDamage,
+      life: 2.2,
+      shooterType: enemy.type,
+      shooterPos: enemy.group.position.clone(),
+    });
+  }
+
+  private createMeleeSlashEffect(startPos: THREE.Vector3, targetPos: THREE.Vector3) {
+    const mid = new THREE.Vector3().addVectors(startPos, targetPos).multiplyScalar(0.5);
+    mid.y += 1.2;
+    const geom = new THREE.RingGeometry(0.8, 1.4, 12, 1, 0, Math.PI);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x00f0ff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const slash = new THREE.Mesh(geom, mat);
+    slash.position.copy(mid);
+    slash.lookAt(targetPos);
+    this.scene.add(slash);
+
+    setTimeout(() => {
+      this.scene.remove(slash);
+      geom.dispose();
+      mat.dispose();
+    }, 200);
   }
 
   // --- ADAM SMASHER MISSILE LAUNCH ---
@@ -922,21 +1027,67 @@ export class GameEngine {
 
       enemy.update(delta, this.playerPosition, worldTimeScale);
 
-      // Enemy Attacks
+      // Enemy Attacks (Visible projectiles & animations, avoiding invisible damage!)
       const dist = enemy.group.position.distanceTo(this.playerPosition);
       if (dist <= enemy.attackRange && enemy.attackCooldown <= 0 && !enemy.isStunned) {
-        enemy.attackCooldown = 1.8;
-        this.playerTakeDamage(enemy.attackDamage);
+        enemy.attackCooldown = 1.6 + Math.random() * 0.6;
+        enemy.triggerAttack();
+
+        if (enemy.type === 'maxtac' && dist <= 3.2) {
+          // Mantis Blade Melee Dash
+          this.createMeleeSlashEffect(enemy.group.position, this.playerPosition);
+          this.playerTakeDamage(enemy.attackDamage, enemy.group.position);
+        } else {
+          // Visible laser/plasma projectile
+          this.fireEnemyProjectile(enemy);
+        }
 
         // Adam Smasher Missile Attack
         if (enemy.isBoss && enemy.rocketCooldown <= 0) {
-          enemy.rocketCooldown = 4.5;
+          enemy.rocketCooldown = 4.2;
           this.fireAdamSmasherMissile(enemy);
         }
       }
     }
 
-    // 10. Update Rockets
+    // 10. Update Enemy Projectiles
+    for (let p = this.enemyProjectiles.length - 1; p >= 0; p--) {
+      const proj = this.enemyProjectiles[p];
+      proj.life -= delta * worldTimeScale;
+      proj.position.addScaledVector(proj.velocity, delta * worldTimeScale);
+      proj.mesh.position.copy(proj.position);
+
+      const distToPlayer = proj.position.distanceTo(this.playerPosition);
+      if (distToPlayer <= 1.0) {
+        // Hit player!
+        this.scene.remove(proj.mesh);
+        proj.mesh.geometry.dispose();
+        this.spawnImpactSparks(proj.position);
+        this.playerTakeDamage(proj.damage, proj.shooterPos);
+        this.enemyProjectiles.splice(p, 1);
+        continue;
+      }
+
+      // Check collision with ground or obstacle boxes
+      let hitTerrain = proj.position.y <= 0.1;
+      if (!hitTerrain) {
+        for (const obs of this.mapBuilder.obstacles) {
+          if (obs.box.containsPoint(proj.position)) {
+            hitTerrain = true;
+            break;
+          }
+        }
+      }
+
+      if (hitTerrain || proj.life <= 0) {
+        this.scene.remove(proj.mesh);
+        proj.mesh.geometry.dispose();
+        if (hitTerrain) this.spawnImpactSparks(proj.position);
+        this.enemyProjectiles.splice(p, 1);
+      }
+    }
+
+    // 11. Update Rockets
     for (let r = this.rockets.length - 1; r >= 0; r--) {
       const rock = this.rockets[r];
       rock.life -= delta * worldTimeScale;
@@ -949,10 +1100,21 @@ export class GameEngine {
         this.scene.remove(rock.mesh);
         this.spawnImpactSparks(rock.position);
         if (distToPlayer <= 5.0) {
-          this.playerTakeDamage(Math.round(45 * (1 - distToPlayer / 5.0)));
+          this.playerTakeDamage(Math.round(45 * (1 - distToPlayer / 5.0)), rock.position);
         }
         this.rockets.splice(r, 1);
       }
+    }
+
+    // 12. Update Damage Indicators & Damage Flash Timer
+    for (let d = this.damageIndicators.length - 1; d >= 0; d--) {
+      this.damageIndicators[d].time -= delta;
+      if (this.damageIndicators[d].time <= 0) {
+        this.damageIndicators.splice(d, 1);
+      }
+    }
+    if (this.damageFlashTimer > 0) {
+      this.damageFlashTimer -= delta;
     }
 
     // 11. Update Tracers & Sparks
@@ -1098,7 +1260,7 @@ export class GameEngine {
 
   // --- DAMAGE TO PLAYER ---
 
-  public playerTakeDamage(rawAmount: number) {
+  public playerTakeDamage(rawAmount: number, attackerPos?: THREE.Vector3) {
     if (this.waveState === 'game_over' || this.waveState === 'victory') return;
 
     // Calculate resistances (Torso T1: 35%, Cyberskeleton: 70%)
@@ -1117,7 +1279,25 @@ export class GameEngine {
     }
 
     this.playerStats.hp -= damage;
+    this.damageFlashTimer = 0.45;
     sound.playPlayerHurt();
+
+    // Directional damage indicator
+    if (attackerPos) {
+      const dx = attackerPos.x - this.playerPosition.x;
+      const dz = attackerPos.z - this.playerPosition.z;
+      // angle in world space (0 is -Z)
+      const worldAngle = Math.atan2(dx, -dz);
+      let relAngle = worldAngle - this.yaw;
+      while (relAngle > Math.PI) relAngle -= Math.PI * 2;
+      while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+
+      this.damageIndicators.push({
+        id: Math.random(),
+        angle: relAngle,
+        time: 1.2,
+      });
+    }
 
     if (this.playerStats.hp <= 0) {
       this.playerStats.hp = 0;

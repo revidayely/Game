@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { GameEngine } from '../game/GameEngine';
 import { getImplantById } from '../game/Cyberware';
 import { WEAPON_CONFIGS } from '../game/Weapons';
-import { Activity, AlertTriangle, BatteryCharging, Crosshair, Cpu, FastForward, Flame, Footprints, Hammer, Radio, Scissors, Shield, ShieldAlert, Skull, Volume2, VolumeX, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, BatteryCharging, Brain, Crosshair, Cpu, FastForward, Flame, Footprints, Hammer, Radio, Scissors, Shield, ShieldAlert, Skull, Volume2, VolumeX, Zap } from 'lucide-react';
 
 interface HUDProps {
   engine: GameEngine | null;
@@ -86,9 +86,19 @@ export const HUD: React.FC<HUDProps> = ({ engine, onOpenSettings }) => {
         </div>
       )}
 
-      {/* 2. TOP HEADER (Wave Counter, Enemies Remaining, Boss Bar) */}
-      <div className="absolute top-4 left-0 right-0 flex flex-col items-center">
-        <div className="flex items-center gap-4 bg-black/80 px-6 py-2 border-2 border-yellow-400 drop-shadow-[0_0_15px_rgba(252,238,10,0.3)]">
+      {/* SCREEN DAMAGE FLASH VIGNETTE */}
+      {engine.damageFlashTimer > 0 && (
+        <div
+          className="pointer-events-none absolute inset-0 border-[12px] border-red-600/70 bg-red-950/30 mix-blend-screen transition-opacity"
+          style={{ opacity: Math.min(1, engine.damageFlashTimer / 0.45) }}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_45%,_rgba(255,0,60,0.5)_100%)]" />
+        </div>
+      )}
+
+      {/* 2. TOP HEADER (Wave Counter, Enemies Remaining, Boss Bar & PROMINENT CYBERPSYCHOSIS BAR) */}
+      <div className="absolute top-4 left-0 right-0 flex flex-col items-center z-20 px-4">
+        <div className="flex items-center gap-4 bg-black/85 px-6 py-2 border-2 border-yellow-400 drop-shadow-[0_0_15px_rgba(252,238,10,0.3)]">
           <div className="text-yellow-400 font-black tracking-wider text-xl">
             WAVE <span className="text-white">{engine.currentWave}</span> / {engine.maxWaves}
           </div>
@@ -102,9 +112,87 @@ export const HUD: React.FC<HUDProps> = ({ engine, onOpenSettings }) => {
           </div>
         </div>
 
+        {/* PROMINENT LARGE TOP-SCREEN CYBERPSYCHOSIS SANITY BAR */}
+        <div className={`mt-2.5 w-full max-w-2xl bg-black/95 p-3 border-2 transition-all ${
+          stats.isPsychotic
+            ? 'border-red-500 bg-red-950/70 drop-shadow-[0_0_25px_#ff003c]'
+            : sanityPercent >= 80
+            ? 'border-red-500 bg-black/95 drop-shadow-[0_0_20px_#ff003c] animate-pulse'
+            : sanityPercent >= 50
+            ? 'border-yellow-400 bg-black/95 drop-shadow-[0_0_15px_#fcee0a]'
+            : 'border-purple-500 bg-black/95 drop-shadow-[0_0_15px_#a855f7]'
+        }`}>
+          <div className="flex justify-between items-center mb-1.5">
+            <div className="flex items-center gap-2">
+              <Brain className={`w-4 h-4 ${sanityPercent >= 80 ? 'text-red-500 animate-spin' : 'text-purple-400'}`} />
+              <span className="font-black tracking-widest text-xs uppercase text-purple-300">
+                CYBERPSYCHOSIS SANITY BUFFER
+              </span>
+              {/* State badge */}
+              <span className={`text-[9px] font-black px-2 py-0.5 uppercase border ${
+                stats.isPsychotic
+                  ? 'bg-red-600 text-white border-white animate-bounce'
+                  : sanityPercent >= 80
+                  ? 'bg-red-950 text-red-400 border-red-500'
+                  : sanityPercent >= 50
+                  ? 'bg-yellow-950 text-yellow-400 border-yellow-400'
+                  : 'bg-purple-950 text-purple-300 border-purple-500'
+              }`}>
+                {stats.isPsychotic
+                  ? '⚠ NEURAL PARALYSIS EPISODE'
+                  : sanityPercent >= 80
+                  ? 'CRITICAL IMMINENT'
+                  : sanityPercent >= 50
+                  ? 'STRAINED // ELEVATED RISK'
+                  : 'NOMINAL STABLE'}
+              </span>
+            </div>
+
+            <div className="text-right text-[11px] font-bold">
+              <span className={sanityPercent >= 80 ? 'text-red-400 font-black' : 'text-purple-300'}>
+                {Math.round(stats.sanity)}%
+              </span>
+              <span className="text-gray-400 text-[10px]"> / {stats.maxSanity}% MAX CAPACITY</span>
+            </div>
+          </div>
+
+          {/* Visual Bar with Chrome Lockout Zone */}
+          <div className="w-full h-5 bg-gray-950 border border-white/20 relative overflow-hidden flex">
+            {/* Active Sanity Fill */}
+            <div
+              className={`h-full transition-all duration-200 ${
+                sanityPercent >= 80
+                  ? 'bg-gradient-to-r from-red-600 via-purple-600 to-red-500 animate-pulse'
+                  : sanityPercent >= 50
+                  ? 'bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500'
+                  : 'bg-gradient-to-r from-cyan-400 via-purple-500 to-purple-400'
+              }`}
+              style={{ width: `${Math.min(stats.maxSanity, stats.sanity)}%` }}
+            />
+
+            {/* Permanent Chrome Lockout Zone (Cut by installed cyberware) */}
+            {stats.maxSanity < 100 && (
+              <div
+                className="absolute top-0 bottom-0 right-0 bg-red-950/80 border-l-2 border-red-500 flex items-center justify-center overflow-hidden"
+                style={{ width: `${100 - stats.maxSanity}%` }}
+                title="Sanity capacity permanently reduced by installed cyberware chrome"
+              >
+                <span className="text-[8px] font-black text-red-400 uppercase tracking-tighter truncate px-1">
+                  LOCKED -{100 - stats.maxSanity}% (CHROME)
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center text-[9px] text-gray-400 mt-1 font-semibold">
+            <span>{hasCyberskeleton ? '🔥 CYBERSKELETON DRAINING SANITY PER SECOND' : 'USE SANDEVISTAN / QUICKHACK TO BUILD UP RISK'}</span>
+            <span className="text-cyan-400">PENEKAN IMUN (AIR DROP) RESETS BAR TO 0%</span>
+          </div>
+        </div>
+
         {/* BOSS HEALTH BAR IF ACTIVE */}
         {engine.activeBoss && !engine.activeBoss.isDead && (
-          <div className="mt-3 w-full max-w-xl bg-black/90 p-3 border-2 border-red-600 drop-shadow-[0_0_20px_rgba(255,0,60,0.6)]">
+          <div className="mt-2.5 w-full max-w-xl bg-black/90 p-3 border-2 border-red-600 drop-shadow-[0_0_20px_rgba(255,0,60,0.6)]">
             <div className="flex justify-between items-center mb-1">
               <span className="text-red-500 font-black tracking-widest text-base flex items-center gap-2">
                 <Skull className="w-5 h-5 text-red-500 animate-spin" /> {engine.activeBoss.name}
@@ -123,8 +211,31 @@ export const HUD: React.FC<HUDProps> = ({ engine, onOpenSettings }) => {
         )}
       </div>
 
-      {/* 3. CENTER CROSSHAIR & HITMARKERS */}
+      {/* 3. CENTER CROSSHAIR, HITMARKERS & DIRECTIONAL DAMAGE INDICATORS */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+        {/* Directional Damage Indicators */}
+        {engine.damageIndicators.map(ind => {
+          const radius = 70;
+          const x = Math.sin(ind.angle) * radius;
+          const y = -Math.cos(ind.angle) * radius;
+          const rotDeg = (ind.angle * 180) / Math.PI;
+
+          return (
+            <div
+              key={ind.id}
+              className="absolute pointer-events-none transition-opacity duration-150"
+              style={{
+                left: `calc(50% + ${x}px)`,
+                top: `calc(50% + ${y}px)`,
+                transform: `translate(-50%, -50%) rotate(${rotDeg}deg)`,
+                opacity: Math.max(0, ind.time / 1.2),
+              }}
+            >
+              <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[20px] border-b-red-600 drop-shadow-[0_0_12px_#ff003c]" />
+            </div>
+          );
+        })}
+
         <div className="relative w-10 h-10 flex items-center justify-center">
           {/* Default Crosshair reticle */}
           <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full" />
@@ -135,7 +246,7 @@ export const HUD: React.FC<HUDProps> = ({ engine, onOpenSettings }) => {
 
           {/* Hitmarker Flash */}
           {hitmarkerState.active && (
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               {hitmarkerState.isHeadshot ? (
                 <div className="flex flex-col items-center">
                   <Skull className="w-8 h-8 text-red-500 drop-shadow-[0_0_10px_#ff003c]" />

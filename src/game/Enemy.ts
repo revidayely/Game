@@ -34,14 +34,31 @@ export class Enemy {
   public allMeshes: THREE.Mesh[] = [];
 
   // Animation & Visuals
+  public attackAnimTimer: number = 0;
   private materials: THREE.MeshStandardMaterial[] = [];
   private flashTimer: number = 0;
   private walkTime: number = Math.random() * 10;
   private leftLeg!: THREE.Mesh;
   private rightLeg!: THREE.Mesh;
-  private leftArm!: THREE.Mesh;
-  private rightArm!: THREE.Mesh;
+  public leftArm!: THREE.Mesh;
+  public rightArm!: THREE.Mesh;
   private shoulderPod?: THREE.Mesh;
+  public weaponTip?: THREE.Object3D;
+
+  public triggerAttack() {
+    this.attackAnimTimer = 0.38;
+  }
+
+  public getMuzzleWorldPos(): THREE.Vector3 {
+    if (this.weaponTip) {
+      const v = new THREE.Vector3();
+      this.weaponTip.getWorldPosition(v);
+      return v;
+    }
+    const pos = this.group.position.clone();
+    pos.y += (this.isBoss ? 2.2 : 1.3);
+    return pos;
+  }
 
   constructor(type: EnemyType, wave: number, spawnPos: THREE.Vector3) {
     this.type = type;
@@ -508,6 +525,21 @@ export class Enemy {
     const distToPlayer = this.group.position.distanceTo(playerPos);
     this.group.lookAt(playerPos.x, this.group.position.y, playerPos.z);
 
+    // Attack animation handling
+    if (this.attackAnimTimer > 0) {
+      this.attackAnimTimer -= delta * timeScale;
+      if (this.rightArm) {
+        if (this.type === 'maxtac') {
+          // Double Mantis Blade forward slash
+          this.rightArm.rotation.x = -Math.PI / 2.5 + Math.sin(this.attackAnimTimer * 18) * 0.8;
+          if (this.leftArm) this.leftArm.rotation.x = -Math.PI / 2.5 - Math.sin(this.attackAnimTimer * 18) * 0.8;
+        } else {
+          // Weapon raised recoil kick
+          this.rightArm.rotation.x = -Math.PI / 2.1 + (0.38 - this.attackAnimTimer) * 0.3;
+        }
+      }
+    }
+
     // Stop and fire if in attack range, or close in if far
     const stopDist = this.type === 'maxtac' ? 2.5 : this.isBoss ? 8 : 7;
     const effectiveSpeed = this.speed * timeScale;
@@ -517,13 +549,15 @@ export class Enemy {
       moveDir.y = 0;
       this.group.position.addScaledVector(moveDir, effectiveSpeed * delta);
 
-      // Walk cycle animation
-      this.walkTime += delta * 6 * timeScale;
-      const legAngle = Math.sin(this.walkTime) * 0.45;
-      if (this.leftLeg) this.leftLeg.rotation.x = legAngle;
-      if (this.rightLeg) this.rightLeg.rotation.x = -legAngle;
-      if (this.leftArm) this.leftArm.rotation.x = -legAngle * 0.7;
-      if (this.rightArm) this.rightArm.rotation.x = legAngle * 0.7;
+      // Walk cycle animation (only if not actively slashing)
+      if (this.attackAnimTimer <= 0) {
+        this.walkTime += delta * 6 * timeScale;
+        const legAngle = Math.sin(this.walkTime) * 0.45;
+        if (this.leftLeg) this.leftLeg.rotation.x = legAngle;
+        if (this.rightLeg) this.rightLeg.rotation.x = -legAngle;
+        if (this.leftArm) this.leftArm.rotation.x = -legAngle * 0.7;
+        if (this.rightArm) this.rightArm.rotation.x = legAngle * 0.7;
+      }
     } else {
       // Idle breathing
       if (this.leftLeg) this.leftLeg.rotation.x = 0;

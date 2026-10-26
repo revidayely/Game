@@ -85,9 +85,9 @@ export default function App() {
     }
   };
 
-  const handleClaimAirDrop = (implantIdToEquip?: string) => {
+  const handleClaimAirDrop = (choice: 'chrome' | 'human_supplies', implantIdToEquip?: string) => {
     if (engineRef.current) {
-      engineRef.current.claimAirDrop(implantIdToEquip);
+      engineRef.current.claimAirDrop(choice, implantIdToEquip);
     }
     setActiveAirDropLoot(null);
 

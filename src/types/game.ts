@@ -47,6 +47,12 @@ export interface PlayerStats {
 
 export type EnemyType = 'scav' | 'cyber_merc' | 'maxtac' | 'adam_smasher';
 
+export interface DamageIndicator {
+  id: number;
+  angle: number; // Angle in radians relative to player camera facing
+  time: number; // Duration countdown
+}
+
 export interface AirDropLoot {
   ammoRefill: boolean;
   armorShards: number;
